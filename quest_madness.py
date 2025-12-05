@@ -887,6 +887,55 @@ class Level:
 
         return False
 
+def show_level_complete_menu(screen, clock, font, big_font, level_num, level_stats):
+    """Show level complete screen with replay/next options"""
+    selecting = True
+    selected = 0
+    options = ["Next Level", "Replay Level", "Return to Menu"]
+    
+    while selecting:
+        clock.tick(FPS)
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return None
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_UP or event.key == pygame.K_w:
+                    selected = (selected - 1) % len(options)
+                if event.key == pygame.K_DOWN or event.key == pygame.K_s:
+                    selected = (selected + 1) % len(options)
+                if event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
+                    if selected == 0:
+                        return "next"
+                    elif selected == 1:
+                        return "replay"
+                    elif selected == 2:
+                        return "menu"
+        
+        screen.fill(DARK_BLUE)
+        
+        title = big_font.render(f"Level {level_num} Complete!", True, YELLOW)
+        screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, 50))
+        
+        stats_text = font.render(
+            f"Crystals: +{level_stats['crystals']} | Coins: +{level_stats['coins']} | Score: {level_stats['score']}", 
+            True, PURPLE
+        )
+        screen.blit(stats_text, (SCREEN_WIDTH // 2 - stats_text.get_width() // 2, 150))
+        
+        # Draw options
+        for i, option in enumerate(options):
+            if i == selected:
+                option_text = font.render(f"> {option} <", True, YELLOW)
+            else:
+                option_text = font.render(option, True, WHITE)
+            screen.blit(option_text, (SCREEN_WIDTH // 2 - option_text.get_width() // 2, 300 + i * 80))
+        
+        hint = font.render("Use UP/DOWN to select, ENTER to confirm", True, GRAY)
+        screen.blit(hint, (SCREEN_WIDTH // 2 - hint.get_width() // 2, 650))
+        
+        pygame.display.flip()
+
 # ============ MAIN MENU ============
 def show_menu(screen, clock, font, big_font, player_stats):
     """Display main menu"""
@@ -903,14 +952,15 @@ def show_menu(screen, clock, font, big_font, player_stats):
         
         options = [
             "1. Start Game",
-            "2. Shop",
-            "3. Tutorial",
-            "4. Exit"
+            "2. Replay Levels",
+            "3. Shop",
+            "4. Tutorial",
+            "5. Exit"
         ]
         
         for i, option in enumerate(options):
             text = font.render(option, True, WHITE)
-            screen.blit(text, (SCREEN_WIDTH // 2 - text.get_width() // 2, 300 + i * 80))
+            screen.blit(text, (SCREEN_WIDTH // 2 - text.get_width() // 2, 300 + i * 60))
         
         stats_text = font.render(f"Total Crystals: {player_stats['crystals']} | Total Coins: {player_stats['coins']}", True, PURPLE)
         screen.blit(stats_text, (SCREEN_WIDTH // 2 - stats_text.get_width() // 2, SCREEN_HEIGHT - 50))
@@ -924,10 +974,12 @@ def show_menu(screen, clock, font, big_font, player_stats):
                 if event.key == pygame.K_1:
                     return "start"
                 elif event.key == pygame.K_2:
-                    return "shop"
+                    return "replay"
                 elif event.key == pygame.K_3:
-                    return "tutorial"
+                    return "shop"
                 elif event.key == pygame.K_4:
+                    return "tutorial"
+                elif event.key == pygame.K_5:
                     return "quit"
 
 def show_shop(screen, clock, font, big_font, player_stats):
@@ -1091,6 +1143,48 @@ def main():
             save_progress(player_stats)  # Save after shop purchases
         elif choice == "tutorial":
             show_tutorial(screen, clock, font)
+        elif choice == "replay":
+            # Replay all levels from level 1
+            level_num = 1
+            while level_num <= max_levels:
+                level = Level(level_num)
+                level.player.health = player_stats['max_health']
+                result = level.run(screen, clock, font)
+                
+                if result is None:
+                    break
+                elif result:
+                    # Show level complete menu with replay option
+                    level_stats = {
+                        'crystals': level.player.crystals,
+                        'coins': level.player.coins,
+                        'score': level.player.score
+                    }
+                    menu_choice = show_level_complete_menu(screen, clock, font, big_font, level_num, level_stats)
+                    
+                    if menu_choice == "next":
+                        level_num += 1
+                    elif menu_choice == "replay":
+                        # Stay on same level
+                        continue
+                    elif menu_choice == "menu" or menu_choice is None:
+                        break
+                else:
+                    screen.fill(RED)
+                    text = big_font.render("Game Over!", True, YELLOW)
+                    screen.blit(text, (SCREEN_WIDTH // 2 - text.get_width() // 2, SCREEN_HEIGHT // 2 - 50))
+                    pygame.display.flip()
+                    pygame.time.wait(2000)
+                    break
+            
+            if level_num > max_levels:
+                screen.fill(DARK_BLUE)
+                text = big_font.render("Replay Complete!", True, YELLOW)
+                subtext = font.render("You finished replaying all levels!", True, LIGHT_BLUE)
+                screen.blit(text, (SCREEN_WIDTH // 2 - text.get_width() // 2, SCREEN_HEIGHT // 2 - 100))
+                screen.blit(subtext, (SCREEN_WIDTH // 2 - subtext.get_width() // 2, SCREEN_HEIGHT // 2))
+                pygame.display.flip()
+                pygame.time.wait(3000)
         elif choice == "start":
             level_num = player_stats.get('highest_level', 1)
             while level_num <= max_levels:
@@ -1107,18 +1201,24 @@ def main():
                     if level_num >= player_stats.get('highest_level', 1):
                         player_stats['highest_level'] = level_num + 1
                     
-                    screen.fill(DARK_BLUE)
-                    text = big_font.render(f"Level {level_num} Complete!", True, YELLOW)
-                    stats = font.render(f"Crystals: +{level.player.crystals} | Coins: +{level.player.coins} | Score: {level.player.score}", True, PURPLE)
-                    screen.blit(text, (SCREEN_WIDTH // 2 - text.get_width() // 2, SCREEN_HEIGHT // 2 - 100))
-                    screen.blit(stats, (SCREEN_WIDTH // 2 - stats.get_width() // 2, SCREEN_HEIGHT // 2))
-                    pygame.display.flip()
-                    pygame.time.wait(3000)
+                    # Show level complete menu with replay option
+                    level_stats = {
+                        'crystals': level.player.crystals,
+                        'coins': level.player.coins,
+                        'score': level.player.score
+                    }
+                    menu_choice = show_level_complete_menu(screen, clock, font, big_font, level_num, level_stats)
                     
-                    # Save progress after each level
-                    save_progress(player_stats)
-                    
-                    level_num += 1
+                    if menu_choice == "next":
+                        save_progress(player_stats)
+                        level_num += 1
+                    elif menu_choice == "replay":
+                        # Reset player stats and replay current level
+                        level_num = level_num  # Stay on same level
+                        continue
+                    elif menu_choice == "menu" or menu_choice is None:
+                        save_progress(player_stats)
+                        break
                 else:
                     screen.fill(RED)
                     text = big_font.render("Game Over!", True, YELLOW)
